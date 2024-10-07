@@ -1,14 +1,17 @@
+import os
+
 import torch
 import numpy as np
-from torch import nn
-import os
+
 from plyfile import PlyData, PlyElement
+from torch import nn
+
+from utils import quarternion_to_matrix
 
 DEVICE = "cpu"
 
 # extracted from https://github.com/graphdeco-inria/gaussian-splatting/blob/main/scene/gaussian_model.py
 class GaussianModel:
-
     def __init__(self, sh_degree : int):
         self.active_sh_degree = 0
         self.max_sh_degree = sh_degree  
@@ -25,6 +28,7 @@ class GaussianModel:
         self.percent_dense = 0
         self.spatial_lr_scale = 0
 
+
     def construct_list_of_attributes(self):
         l = ['x', 'y', 'z', 'nx', 'ny', 'nz']
         # All channels except the 3 DC
@@ -38,6 +42,7 @@ class GaussianModel:
         for i in range(self._rotation.shape[1]):
             l.append('rot_{}'.format(i))
         return l
+
 
     def save_ply(self, path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -57,6 +62,7 @@ class GaussianModel:
         elements[:] = list(map(tuple, attributes))
         el = PlyElement.describe(elements, 'vertex')
         PlyData([el]).write(path)
+
 
     def load_ply(self, path):
         plydata = PlyData.read(path)
@@ -100,3 +106,63 @@ class GaussianModel:
         self._rotation = torch.tensor(rots, dtype=torch.float, device=DEVICE)
 
         self.active_sh_degree = self.max_sh_degree
+
+
+    def print_gaussian_shapes(self) -> None:
+        """
+        Prints out the shapes of the various properties of the gaussian splatting models. Used for diagnostics.
+        """
+
+        print(f"Number of gaussian splats: {self._xyz.shape[0]}")
+        print(f"Shape of _xyz: {self._xyz.shape}")
+        print(f"Shape of _features_dc: {self._features_dc.shape}")
+        print(f"Shape of _features_rest: {self._features_rest.shape}")
+        print(f"Shape of _opacity: {self._opacity.shape}")
+        print(f"Shape of _scaling: {self._scaling.shape}")
+        print(f"Shape of _rotation: {self._rotation.shape}")
+
+
+    def filter_flat_gaussians(self, threshold: float = 4) -> None:
+        """
+        Modifies the gaussian model to only include gaussians which are "flat" enough.
+
+        Parameters:
+            threshold: Sets how much lower the minimum scale needs to be compared to the other scales. The scaling seems to be log_2 scales, so the default of 4 requires the thinnest dimension to be 2^4 = 16 times less than the maximum scale.
+        """
+
+        top_2, _ = self._scaling.topk(2, dim=1)
+        second_scaling, _ = torch.min(top_2, dim=1, keepdim=True)
+        min_scaling, _ = torch.min(self._scaling, dim=1, keepdim=True)
+        flat_mask = (second_scaling - min_scaling > threshold).squeeze()
+        self.filter_gaussian_mask(flat_mask)
+
+
+    def filter_gaussian_mask(self, mask: torch.Tensor) -> None:
+        """
+        Filters and modifies the gaussian using a given mask.
+
+        Parameters:
+            mask: Tensor of size (n) of booleans or truthy/falsy values to be used as a mask
+        """
+
+        self._xyz = self._xyz[mask]
+        self._features_dc = self._features_dc[mask]
+        self._features_rest = self._features_rest[mask]
+        self._opacity = self._opacity[mask]
+        self._scaling = self._scaling[mask]
+        self._rotation = self._rotation[mask]
+
+
+    def get_normal_vectors(self) -> torch.Tensor:
+        """
+        Returns a tensor with the normal vector for each gaussian splat.
+        
+        Returns:
+            torch.Tensor: a tensor of size (n, 3) containing the normal vectors of the corresponding gaussian splat
+        """
+
+        VECTORS = torch.Tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+        min_index = torch.argmin(self._scaling, dim=1)
+        normal_axes = VECTORS.index_select(0, min_index).unsqueeze(2)
+        rotation_matrices = quarternion_to_matrix(self._rotation)
+        return torch.matmul(rotation_matrices, normal_axes)

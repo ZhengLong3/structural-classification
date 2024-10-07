@@ -144,6 +144,4 @@ def get_normal_vectors(gaussian: GaussianModel) -> torch.Tensor:
     min_index = torch.argmin(gaussian._scaling, dim=1)
     normal_axes = VECTORS.index_select(0, min_index).unsqueeze(2)
     rotation_matrices = quarternion_to_matrix(gaussian._rotation)
-    print(rotation_matrices.shape)
-    print(normal_axes.shape)
     return torch.matmul(rotation_matrices, normal_axes)
