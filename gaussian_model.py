@@ -6,7 +6,7 @@ import numpy as np
 from plyfile import PlyData, PlyElement
 from torch import nn
 
-from utils import quarternion_to_matrix
+from utils import quarternion_to_matrix, tensor_to_csv
 
 DEVICE = "cpu"
 
@@ -165,4 +165,27 @@ class GaussianModel:
         min_index = torch.argmin(self._scaling, dim=1)
         normal_axes = VECTORS.index_select(0, min_index).unsqueeze(2)
         rotation_matrices = quarternion_to_matrix(self._rotation)
-        return torch.matmul(rotation_matrices, normal_axes)
+        return torch.matmul(rotation_matrices, normal_axes).squeeze()
+    
+
+    def get_adjacency_matrix(self, threshold: float = 0.8, eps: float = 1e-5) -> torch.Tensor:
+        """
+        Returns the adjacency matrix of the splats for spectral clustering. The diagonals are 0 and the values are inverse distance if the normal vectors have a cosine similarity above a certain threshold.
+
+        Parameters:
+            threshold: Minimum cosine similarity before using inverse distance
+            eps: Minimum distance when taking inverse distance
+
+        Returns:
+            torch.Tensor: A tensor of size (n, n) with diagonals 0 and inverse distance if normals are close enough
+        """
+
+        pairwise_distance = torch.cdist(self._xyz, self._xyz)
+        pairwise_distance[pairwise_distance < eps] = eps
+        inverse_distance = 1.0 / pairwise_distance
+        inverse_distance.fill_diagonal_(0)
+        normal_vectors = self.get_normal_vectors()
+        cosine_similarity = torch.matmul(normal_vectors, normal_vectors.T)
+        mask = cosine_similarity > threshold
+        return inverse_distance * mask.int().float()
+        
