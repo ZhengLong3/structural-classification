@@ -185,7 +185,7 @@ class GaussianModel:
         inverse_distance = 1.0 / pairwise_distance
         inverse_distance.fill_diagonal_(0)
         normal_vectors = self.get_normal_vectors()
-        cosine_similarity = torch.matmul(normal_vectors, normal_vectors.T)
+        cosine_similarity = torch.abs(torch.matmul(normal_vectors, normal_vectors.T))
         mask = cosine_similarity > threshold
         return inverse_distance * mask.int().float()
         
