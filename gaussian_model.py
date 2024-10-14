@@ -1,3 +1,6 @@
+# for type hinting of GaussianModel
+from __future__ import annotations
+
 import os
 
 import torch
@@ -8,7 +11,10 @@ from torch import nn
 
 from utils import quarternion_to_matrix, tensor_to_csv
 
+
 DEVICE = "cpu"
+COLOURS = [[0, 0, 0], [1, 1, 1], [0, 1, 1], [1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0], [1, 0, 1]]
+USEFUL_ATTRIBUTES = ["_xyz", "_features_dc", "_features_rest", "_scaling", "_rotation", "_opacity"]
 
 # extracted from https://github.com/graphdeco-inria/gaussian-splatting/blob/main/scene/gaussian_model.py
 class GaussianModel:
@@ -145,12 +151,8 @@ class GaussianModel:
             mask: Tensor of size (n) of booleans or truthy/falsy values to be used as a mask
         """
 
-        self._xyz = self._xyz[mask]
-        self._features_dc = self._features_dc[mask]
-        self._features_rest = self._features_rest[mask]
-        self._opacity = self._opacity[mask]
-        self._scaling = self._scaling[mask]
-        self._rotation = self._rotation[mask]
+        for attribute in USEFUL_ATTRIBUTES:
+            setattr(self, attribute, getattr(self, attribute)[mask])
 
 
     def get_normal_vectors(self) -> torch.Tensor:
@@ -168,7 +170,7 @@ class GaussianModel:
         return torch.matmul(rotation_matrices, normal_axes).squeeze()
     
 
-    def get_adjacency_matrix(self, threshold: float = 0.8, eps: float = 1e-5) -> torch.Tensor:
+    def get_adjacency_matrix(self, threshold: float = 0.9, eps: float = 1e-5) -> torch.Tensor:
         """
         Returns the adjacency matrix of the splats for spectral clustering. The diagonals are 0 and the values are inverse distance if the normal vectors have a cosine similarity above a certain threshold.
 
@@ -188,4 +190,33 @@ class GaussianModel:
         cosine_similarity = torch.abs(torch.matmul(normal_vectors, normal_vectors.T))
         mask = cosine_similarity > threshold
         return inverse_distance * mask.int().float()
-        
+
+    
+    def merge_gaussians(self, other: GaussianModel) -> GaussianModel:
+        """
+        Modifies the gaussian model by merging another gaussian model's splats to itself.
+
+        Parameters:
+            other: The other gaussian model to merge. It will not be modified
+
+        Returns:
+            GaussianModel: self
+        """
+
+        for attribute in USEFUL_ATTRIBUTES:
+            setattr(self, attribute, torch.cat((getattr(self, attribute), getattr(other, attribute)), dim=0))
+
+        return self
+
+    
+    def colour_by_label(self, labels: torch.Tensor) -> None:
+        """
+        Modifies the colours of the gaussian splats according to the provided labels.
+
+        Parameters:
+            labels: An integer tensor of size (n) which contains the class of each of the n points
+        """
+
+        self._features_dc = torch.tensor(COLOURS).index_select(0, labels).unsqueeze(1)
+        self._features_rest = torch.zeros(self._features_rest.shape)
+        self._opacity = torch.ones(self._opacity.shape)
