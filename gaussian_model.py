@@ -13,7 +13,7 @@ from utils import quarternion_to_matrix, tensor_to_csv
 
 
 DEVICE = "cpu"
-COLOURS = [[0, 0, 0], [1, 1, 1], [0, 1, 1], [1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0], [1, 0, 1]]
+COLOURS = [[0, 0, 0], [1, 1, 1], [0, 1, 1], [1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0], [1, 0, 1], [1, 0.5, 0], [1, 0, 0.5], [0.5, 1, 0], [0, 1, 0.5], [0.5, 0, 1], [0, 0.5, 1]]
 USEFUL_ATTRIBUTES = ["_xyz", "_features_dc", "_features_rest", "_scaling", "_rotation", "_opacity"]
 
 # extracted from https://github.com/graphdeco-inria/gaussian-splatting/blob/main/scene/gaussian_model.py
@@ -128,21 +128,6 @@ class GaussianModel:
         print(f"Shape of _rotation: {self._rotation.shape}")
 
 
-    def filter_flat_gaussians(self, threshold: float = 4) -> None:
-        """
-        Modifies the gaussian model to only include gaussians which are "flat" enough.
-
-        Parameters:
-            threshold: Sets how much lower the minimum scale needs to be compared to the other scales. The scaling seems to be log_2 scales, so the default of 4 requires the thinnest dimension to be 2^4 = 16 times less than the maximum scale.
-        """
-
-        top_2, _ = self._scaling.topk(2, dim=1)
-        second_scaling, _ = torch.min(top_2, dim=1, keepdim=True)
-        min_scaling, _ = torch.min(self._scaling, dim=1, keepdim=True)
-        flat_mask = (second_scaling - min_scaling > threshold).squeeze()
-        self.filter_gaussian_mask(flat_mask)
-
-
     def filter_gaussian_mask(self, mask: torch.Tensor) -> None:
         """
         Filters and modifies the gaussian using a given mask.
@@ -153,6 +138,35 @@ class GaussianModel:
 
         for attribute in USEFUL_ATTRIBUTES:
             setattr(self, attribute, getattr(self, attribute)[mask])
+
+
+    def filter_flat_gaussians(self, threshold: float = 4) -> None:
+        """
+        Modifies the gaussian model to only include gaussians which are "flat" enough.
+
+        Parameters:
+            threshold: Sets how much lower the minimum scale needs to be compared to the other scales. The scaling seems to be log_2 scale, so the default of 4 requires the thinnest dimension to be 2^4 = 16 times less than the maximum scale.
+        """
+
+        top_2, _ = self._scaling.topk(2, dim=1)
+        second_scaling, _ = torch.min(top_2, dim=1, keepdim=True)
+        min_scaling, _ = torch.min(self._scaling, dim=1, keepdim=True)
+        flat_mask = (second_scaling - min_scaling > threshold).squeeze()
+        self.filter_gaussian_mask(flat_mask)
+
+
+    def filter_opaque_gaussians(self, percentile: float = 0.9) -> None:
+        """
+        Modifies the gaussian model to only include gaussians which are opaque enough according to a percentile.
+
+        Parameters:
+            percentile: Keeps the gaussians with opacity above a percentile
+        """
+
+        squeezed_opacity = self._opacity.squeeze()
+        opacity_threshold = torch.quantile(squeezed_opacity, percentile, dim=0)
+        opacity_mask = squeezed_opacity >= opacity_threshold
+        self.filter_gaussian_mask(opacity_mask)
 
 
     def get_normal_vectors(self) -> torch.Tensor:

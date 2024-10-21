@@ -78,7 +78,7 @@ def k_means(features: torch.Tensor, num_clusters: int, max_iter: int = 1000, thr
     return labels
 
 
-def spectral_clustering_zeros(adjacency_matrix: torch.Tensor, zero_threshold: float, num_clusters: int) -> torch.Tensor:
+def spectral_clustering_zeros(adjacency_matrix: torch.Tensor, zero_threshold: float) -> torch.Tensor:
     """
     Does spectral clustering based on zero eigenvalues on an adjacency matrix and returns the labels as a tensor.
 
@@ -94,9 +94,12 @@ def spectral_clustering_zeros(adjacency_matrix: torch.Tensor, zero_threshold: fl
     degree_matrix = torch.diag(adjacency_matrix.sum(0))
     graph_lapacian = degree_matrix - adjacency_matrix
     eigen_values, eigen_vectors = torch.linalg.eig(graph_lapacian)
+    tensor_to_csv(eigen_values.real, "output/eig_val.csv")
+    # tensor_to_csv(eigen_vectors.real, "output/eig_vec.csv")
     zero_mask = eigen_values.real <= zero_threshold
+    num_zeroes = torch.sum(zero_mask)
     eigen_vectors = eigen_vectors[:, zero_mask].real
-    return k_means(eigen_vectors, num_clusters=num_clusters)
+    return k_means(eigen_vectors, num_clusters=num_zeroes)
 
 
 def spectral_clustering_k(adjacency_matrix: torch.Tensor, k: int, num_clusters: int) -> torch.Tensor:
@@ -115,8 +118,8 @@ def spectral_clustering_k(adjacency_matrix: torch.Tensor, k: int, num_clusters: 
     degree_matrix = torch.diag(adjacency_matrix.sum(0))
     graph_lapacian = degree_matrix - adjacency_matrix
     eigen_values, eigen_vectors = torch.linalg.eig(graph_lapacian)
-    tensor_to_csv(eigen_values.real, "output/eig_val.csv")
-    tensor_to_csv(eigen_vectors.real, "output/eig_vec.csv")
+    # tensor_to_csv(eigen_values.real, "output/eig_val.csv")
+    # tensor_to_csv(eigen_vectors.real, "output/eig_vec.csv")
     _, topk_indices = torch.topk(eigen_values.real, k=k, largest=False, sorted=False)
     eigen_vectors = eigen_vectors[:, topk_indices].real
     return k_means(eigen_vectors, num_clusters=num_clusters)
