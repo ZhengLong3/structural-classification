@@ -98,6 +98,7 @@ def spectral_clustering_zeros(adjacency_matrix: torch.Tensor, zero_threshold: fl
     # tensor_to_csv(eigen_vectors.real, "output/eig_vec.csv")
     zero_mask = eigen_values.real <= zero_threshold
     num_zeroes = torch.sum(zero_mask)
+    print(f"Found {num_zeroes} zero eigenvalues")
     eigen_vectors = eigen_vectors[:, zero_mask].real
     return k_means(eigen_vectors, num_clusters=num_zeroes)
 

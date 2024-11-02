@@ -231,6 +231,6 @@ class GaussianModel:
             labels: An integer tensor of size (n) which contains the class of each of the n points
         """
 
-        self._features_dc = torch.tensor(COLOURS).index_select(0, labels).unsqueeze(1)
+        self._features_dc = torch.tensor(COLOURS).index_select(0, labels % len(COLOURS)).unsqueeze(1)
         self._features_rest = torch.zeros(self._features_rest.shape)
         self._opacity = torch.ones(self._opacity.shape)

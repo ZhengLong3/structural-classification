@@ -166,10 +166,13 @@ def create_random_rectangle_gaussians(center: Tuple[float, float, float], other:
 
 
 if __name__ == "__main__":
-    # create_test_gaussians("./output/test.ply")
-    plane1 = create_plane_gaussians((0, 0, 0), (0, 1, 0), (1, 0, 0), 5, 20)
-    plane2 = create_plane_gaussians((2.5, 0, 0), (0, 1, 0), (-1, 0, 0), 5, 20)
-    plane1.merge_gaussians(plane2).save_ply("output/2plane_parallel.ply")
+    # plane1 = create_plane_gaussians((0, 0, 0), (0, 1, 0), (1, 0, 0), 5, 20)
+    # plane2 = create_plane_gaussians((2.5, 0, 0), (0, 1, 0), (-1, 0, 0), 5, 20)
+    # plane1.merge_gaussians(plane2).save_ply("output/2plane_parallel.ply")
 
-    plane1 = create_random_rectangle_gaussians((0, 0, 0), (0, 1, 0), (1, 0, 0), 5, 10, 500)
-    plane1.save_ply("output/rect.ply")
+    # plane1 = create_random_rectangle_gaussians((0, 0, 0), (0, 1, 0), (1, 0, 0), 5, 10, 500)
+    # plane1.save_ply("output/rect.ply")
+
+    plane1 = create_plane_gaussians((0, 0, 0), (0, 1, 0), (1, 0, 0), 5, 20)
+    plane2 = create_plane_gaussians((2.5, 0, 0), (0, 0, 1), (0, 1, 0), 5, 20)
+    plane1.merge_gaussians(plane2).save_ply("output/2plane_perp.ply")
