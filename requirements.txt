@@ -3,3 +3,5 @@ torchvision
 torchaudio
 open3d
 plyfile
+scipy
+matplotlib

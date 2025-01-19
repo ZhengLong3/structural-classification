@@ -94,7 +94,7 @@ def spectral_clustering_zeros(adjacency_matrix: torch.Tensor, zero_threshold: fl
     degree_matrix = torch.diag(adjacency_matrix.sum(0))
     graph_lapacian = degree_matrix - adjacency_matrix
     eigen_values, eigen_vectors = torch.linalg.eig(graph_lapacian)
-    tensor_to_csv(eigen_values.real, "output/eig_val.csv")
+    # tensor_to_csv(eigen_values.real, "output/eig_val.csv")
     # tensor_to_csv(eigen_vectors.real, "output/eig_vec.csv")
     zero_mask = eigen_values.real <= zero_threshold
     num_zeroes = torch.sum(zero_mask)
