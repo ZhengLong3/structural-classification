@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 import math
 
-import open3d as o3d
-import numpy as np
-import scipy
 import networkx as nx
+import numpy as np
+import open3d as o3d
+import scipy
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -32,7 +33,7 @@ class Rectangle:
         Parameters:
             center: Position of the center of the rectangle.
             side1: 3D vector in the form of a tuple describing the length and direction of the first side.
-            side2: 3D vector in the form of a tuple describing the length and directino of the second side.
+            side2: 3D vector in the form of a tuple describing the length and direction of the second side.
 
         Returns:
             A rectangle described by the two side vectors and center.
@@ -45,8 +46,17 @@ class Rectangle:
         rectangle.extent[1] = np.linalg.norm(vector2, 2)
         rectangle.extent[2] = 1
         rectangle.center = np.array(center)
-        rectangle.rotmat = np.stack((vector1 / rectangle.extent[0], vector2 / rectangle.extent[1], np.cross(vector1 / rectangle.extent[0], vector2 / rectangle.extent[1])), axis=-1)
+        rectangle.rotmat = np.column_stack((vector1 / rectangle.extent[0], vector2 / rectangle.extent[1], np.cross(vector1 / rectangle.extent[0], vector2 / rectangle.extent[1])))
         return rectangle
+
+    def get_vectors(self) -> tuple[tuple[float, float, float], tuple[float, float, float], tuple[float, float, float]]:
+        """
+        Returns the center, and two side vectors which describes the rectangle.
+
+        Returns:
+            Tuple containing the center (length 3 tuple), and the two side vectors (also length 3 tuples).
+        """
+        return (tuple(self.center), tuple(self.rotmat[:, 0] * self.extent[0]), tuple(self.rotmat[:, 1] * self.extent[1]))
 
 
 class PlaneNode:
@@ -168,6 +178,19 @@ class PlaneNode:
             corners.append(self.center + self.extent[0] * self.vec1 * scalar[0] + self.extent[1] * self.vec2 * scalar[1])
         return np.vstack(corners)
 
+    def to_rectangle(self) -> Rectangle:
+        """
+        Returns the plane represented by this node as a Rectangle object.
+
+        Returns:
+            Rectangle object describing the plane.
+        """
+        rectangle = Rectangle()
+        rectangle.center = self.center
+        rectangle.extent = self.extent
+        rectangle.rotmat = self.rotmat
+        return rectangle
+
 
 class Edge:
     def __init__(self, node1: PlaneNode, node2: PlaneNode) -> None:
@@ -260,11 +283,35 @@ class StructureGraph:
 
     @classmethod
     def create_from_rectangle_list(cls, rectangle_list: list[Rectangle]) -> StructureGraph:
+        """
+        Create a structure graph object from a list of Rectangles.
+
+        Parameters:
+            rectangle_list: A list of rectangles which make up the structure.
+
+        Returns:
+            A StructureGraph object described by the list of Rectangles.
+        """
         structure_graph = cls()
         for rectangle in rectangle_list:
             structure_graph.add_node(PlaneNode.create_from_rectangle(rectangle))
         structure_graph.populate_edge_list()
         return structure_graph
+
+    @classmethod
+    def create_from_json(cls, path: str) -> StructureGraph:
+        """
+        Create a structure graph object from json format.
+
+        Parameters:
+            path: String for the path to the json file.
+
+        Returns:
+            A StructureGraph object described by the json file.
+        """
+        with open(path, "r") as f:
+            rectangle_list = json.load(f)
+        return cls.create_from_rectangle_list(map(lambda x: Rectangle.create_from_vectors(*x) ,rectangle_list))
     
     def populate_edge_list(self) -> None:
         node_list = list(self.graph.nodes)
@@ -284,6 +331,17 @@ class StructureGraph:
         self.graph.add_node(node)
         self._max_size = max(self._max_size, node.get_area())
 
+    def to_json(self, path: str) -> None:
+        """
+        Saves the structure to json format.
+        """
+        rectangle_list = []
+        node: PlaneNode
+        for node in self.graph.nodes:
+            rectangle_list.append(node.to_rectangle().get_vectors())
+        with open(path, "w") as f:
+            json.dump(rectangle_list, f)
+
     def visualise_graph(self) -> None:
         """
         Visualise the graph as a matplotlib plot.
@@ -293,6 +351,7 @@ class StructureGraph:
         edge_labels = {}
         sizes = []
         colors = []
+        node: PlaneNode
         for node in self.graph.nodes:
             labels[node] = round(node.get_normalised_area(self._max_size), 2)
             sizes.append(node.get_area() * 300)
@@ -300,7 +359,7 @@ class StructureGraph:
         for edge in self.graph.edges:
             edge_labels[edge] = round(self.graph.edges[edge]["object"].get_angle(), 2)
         pos = nx.spring_layout(self.graph)
-        nx.draw(self.graph, pos=pos, labels=labels, with_labels=True, node_size=sizes, node_color=colors)
+        nx.draw(self.graph, pos, labels=labels, with_labels=True, node_color=colors)
         nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=edge_labels)
 
     def visualise_planes_o3d(self) -> None:
@@ -309,7 +368,8 @@ class StructureGraph:
         """
         viewer = o3d.visualization.Visualizer()
         viewer.create_window()
-        for node in self.nodes:
+        node: PlaneNode
+        for node in self.graph.nodes:
             mesh = o3d.geometry.TriangleMesh.create_from_oriented_bounding_box(node.get_obox(), scale=[1, 1, 0.0001])
             mesh.paint_uniform_color(node.color)
             viewer.add_geometry(mesh)
@@ -324,6 +384,9 @@ class StructureGraph:
         """
         ax = plt.figure().add_subplot(projection='3d')
         ax.set_axis_off()
+        ax.set_xlim3d(-5, 5)
+        ax.set_ylim3d(-5, 5)
+        ax.set_zlim3d(-5, 5)
         faces = []
         colours = []
         for node in self.graph.nodes:
@@ -335,9 +398,11 @@ class StructureGraph:
 
 
 if __name__ == "__main__":
-    gaussian = GaussianModel(3)
-    gaussian.load_ply("./data/book_close_atom.ply")
-    graph = StructureGraph.create_from_gaussians(gaussian)
+    # gaussian = GaussianModel(3)
+    # gaussian.load_ply("./data/book_close_atom.ply")
+    # graph = StructureGraph.create_from_gaussians(gaussian)
+    # graph.to_json("output/structure.json")
+    graph = StructureGraph.create_from_json("data/structures.json")
 
     graph.visualise_graph()
     graph.visualise_planes()
