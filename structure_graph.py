@@ -384,9 +384,6 @@ class StructureGraph:
         """
         ax = plt.figure().add_subplot(projection='3d')
         ax.set_axis_off()
-        ax.set_xlim3d(-5, 5)
-        ax.set_ylim3d(-5, 5)
-        ax.set_zlim3d(-5, 5)
         faces = []
         colours = []
         for node in self.graph.nodes:
@@ -395,6 +392,7 @@ class StructureGraph:
         poly = Poly3DCollection(faces)
         poly.set_facecolor(colours)
         ax.add_collection3d(poly)
+        ax.set_aspect("equal")
 
 
 if __name__ == "__main__":
@@ -402,8 +400,10 @@ if __name__ == "__main__":
     # gaussian.load_ply("./data/book_close_atom.ply")
     # graph = StructureGraph.create_from_gaussians(gaussian)
     # graph.to_json("output/structure.json")
-    graph = StructureGraph.create_from_json("data/structures.json")
-
+    # graph = StructureGraph.create_from_json("data/structures.json")
+    with open("data/structures.json", "r") as f:
+        structure_list = json.load(f)
+    graph = StructureGraph.create_from_rectangle_list(map(lambda x: Rectangle.create_from_vectors(*x), structure_list[3]["rects"]))
     graph.visualise_graph()
     graph.visualise_planes()
     plt.show()
