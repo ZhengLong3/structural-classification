@@ -16,48 +16,6 @@ from gaussian_model import GaussianModel
 def get_random_color() -> np.ndarray[np.float64[3]]:
     return np.random.rand(3)
 
-class Rectangle:
-    """
-    Class which describes a 2D rectangle oriented in 3D space.
-    """
-    def __init__(self):
-        self.center: np.ndarray = np.zeros(3, np.float64)
-        self.extent: np.ndarray = np.zeros(3, np.float64)
-        self.rotmat: np.ndarray = np.zeros((3, 3), np.float64)
-
-    @classmethod
-    def create_from_vectors(cls, center: tuple[float, float, float], side1: tuple[float, float, float], side2: tuple[float, float, float]):
-        """
-        Creates a rectangle with a center and two vectors describing the direction of the two sides. Gram-Schmidt orthogonalisation is done in the order of side1 then side2 to obtain orthogonal vectors.
-
-        Parameters:
-            center: Position of the center of the rectangle.
-            side1: 3D vector in the form of a tuple describing the length and direction of the first side.
-            side2: 3D vector in the form of a tuple describing the length and direction of the second side.
-
-        Returns:
-            A rectangle described by the two side vectors and center.
-        """
-        rectangle = Rectangle()
-        vector1 = np.array(side1)
-        vector2 = np.array(side2)
-        vector2 = vector2 - np.dot(vector1, vector2) / np.dot(vector1, vector1) * vector1
-        rectangle.extent[0] = np.linalg.norm(vector1, 2)
-        rectangle.extent[1] = np.linalg.norm(vector2, 2)
-        rectangle.extent[2] = 1
-        rectangle.center = np.array(center)
-        rectangle.rotmat = np.column_stack((vector1 / rectangle.extent[0], vector2 / rectangle.extent[1], np.cross(vector1 / rectangle.extent[0], vector2 / rectangle.extent[1])))
-        return rectangle
-
-    def get_vectors(self) -> tuple[tuple[float, float, float], tuple[float, float, float], tuple[float, float, float]]:
-        """
-        Returns the center, and two side vectors which describes the rectangle.
-
-        Returns:
-            Tuple containing the center (length 3 tuple), and the two side vectors (also length 3 tuples).
-        """
-        return (tuple(self.center), tuple(self.rotmat[:, 0] * self.extent[0]), tuple(self.rotmat[:, 1] * self.extent[1]))
-
 
 class PlaneNode:
     def __init__(self, center: list, extent: list, rotmat: list[list]) -> None:
@@ -84,19 +42,39 @@ class PlaneNode:
             A PlaneNode describing the rectangular plane.    
         """
         return cls(obox.center, obox.extent, obox.R)
-    
+
     @classmethod
-    def create_from_rectangle(cls, rectangle: Rectangle) -> PlaneNode:
+    def create_from_vectors(cls, center: tuple[float, float, float], side1: tuple[float, float, float], side2: tuple[float, float, float]):
         """
-        Create a PlaneNode object using a Rectangle object.
+        Creates a PlaneNode with a center and two vectors describing the direction of the two sides. Gram-Schmidt orthogonalisation is done in the order of side1 then side2 to obtain orthogonal vectors.
 
         Parameters:
-            rectangle: Rectangle object to convert into a plane node.
-        
+            center: Position of the center of the rectangle.
+            side1: 3D vector in the form of a tuple describing the length and direction of the first side.
+            side2: 3D vector in the form of a tuple describing the length and direction of the second side.
+
         Returns:
-            A PlaneNode describing the rectangular plane.
+            A PlaneNode described by the two side vectors and center.
         """
-        return cls(rectangle.center, rectangle.extent, rectangle.rotmat)
+        extent = np.zeros(3, dtype=np.float64)
+        vector1 = np.array(side1)
+        vector2 = np.array(side2)
+        vector2 = vector2 - np.dot(vector1, vector2) / np.dot(vector1, vector1) * vector1
+        extent[0] = np.linalg.norm(vector1, 2)
+        extent[1] = np.linalg.norm(vector2, 2)
+        extent[2] = 1
+        center = np.array(center)
+        rotmat = np.column_stack((vector1 / extent[0], vector2 / extent[1], np.cross(vector1 / extent[0], vector2 / extent[1])))
+        return cls(center, extent, rotmat)
+
+    def get_vectors(self) -> tuple[tuple[float, float, float], tuple[float, float, float], tuple[float, float, float]]:
+        """
+        Returns the center, and two side vectors which describes the rectangle.
+
+        Returns:
+            Tuple containing the center (length 3 tuple), and the two side vectors (also length 3 tuples).
+        """
+        return (tuple(self.center), tuple(self.rotmat[:, 0] * self.extent[0]), tuple(self.rotmat[:, 1] * self.extent[1]))
     
     def get_area(self) -> float:
         """
@@ -177,19 +155,26 @@ class PlaneNode:
         for scalar in scalars:
             corners.append(self.center + self.extent[0] * self.vec1 * scalar[0] + self.extent[1] * self.vec2 * scalar[1])
         return np.vstack(corners)
-
-    def to_rectangle(self) -> Rectangle:
+    
+    def get_angle_to(self, other) -> float:
         """
-        Returns the plane represented by this node as a Rectangle object.
+        Returns the angle between this plane and another plane (assuming planes are infinite).
+        The angle returned will be the angle from the center of a plane to the intersection, to the center of the other plane.
+        This attempts to be the intuitive angle between two connected real-life planes.
 
         Returns:
-            Rectangle object describing the plane.
+            Angle between the two planes, between 0 and pi radians.
         """
-        rectangle = Rectangle()
-        rectangle.center = self.center
-        rectangle.extent = self.extent
-        rectangle.rotmat = self.rotmat
-        return rectangle
+        normal1 = self.normal
+        # I think the angle is correct if we choose 1 normal to be towards the other center, and one away.
+        if np.linalg.norm(self.center + normal1 - other.center) > np.linalg.norm(self.center - normal1 - other.center):
+            # normal of plane 1 to be towards center of plane 2.
+            normal1 = - normal1
+        normal2 = other.normal
+        if np.linalg.norm(other.center + normal2 - self.center) < np.linalg.norm(other.center - normal2 - self.center):
+            # normal of plane 2 to be away from the center of plane 1.
+            normal1 = - normal1
+        return math.acos(np.dot(self.normal, other.normal))
 
 
 class Edge:
@@ -282,19 +267,19 @@ class StructureGraph:
         return structure_graph
 
     @classmethod
-    def create_from_rectangle_list(cls, rectangle_list: list[Rectangle]) -> StructureGraph:
+    def create_from_node_list(cls, node_list: list[PlaneNode]) -> StructureGraph:
         """
         Create a structure graph object from a list of Rectangles.
 
         Parameters:
-            rectangle_list: A list of rectangles which make up the structure.
+            node_list: A list of PlaneNodes which make up the structure.
 
         Returns:
-            A StructureGraph object described by the list of Rectangles.
+            A StructureGraph object described by the list of PlaneNodes.
         """
         structure_graph = cls()
-        for rectangle in rectangle_list:
-            structure_graph.add_node(PlaneNode.create_from_rectangle(rectangle))
+        for node in node_list:
+            structure_graph.add_node(node)
         structure_graph.populate_edge_list()
         return structure_graph
 
@@ -311,10 +296,10 @@ class StructureGraph:
         """
         with open(path, "r") as f:
             rectangle_list = json.load(f)
-        return cls.create_from_rectangle_list(map(lambda x: Rectangle.create_from_vectors(*x) ,rectangle_list))
+        return cls.create_from_node_list(map(lambda x: PlaneNode.create_from_vectors(*x) ,rectangle_list))
     
     def populate_edge_list(self) -> None:
-        node_list = list(self.graph.nodes)
+        node_list: list[PlaneNode] = list(self.graph.nodes)
         for i in range(len(node_list) - 1):
             for j in range(i + 1, len(node_list)):
                 if node_list[i].check_overlap(node_list[j]):
@@ -338,7 +323,7 @@ class StructureGraph:
         rectangle_list = []
         node: PlaneNode
         for node in self.graph.nodes:
-            rectangle_list.append(node.to_rectangle().get_vectors())
+            rectangle_list.append(node.get_vectors())
         with open(path, "w") as f:
             json.dump(rectangle_list, f)
 
@@ -403,7 +388,7 @@ if __name__ == "__main__":
     # graph = StructureGraph.create_from_json("data/structures.json")
     with open("data/structures.json", "r") as f:
         structure_list = json.load(f)
-    graph = StructureGraph.create_from_rectangle_list(map(lambda x: Rectangle.create_from_vectors(*x), structure_list[3]["rects"]))
+    graph = StructureGraph.create_from_node_list(map(lambda x: PlaneNode.create_from_vectors(*x), structure_list[5]["rects"]))
     graph.visualise_graph()
     graph.visualise_planes()
     plt.show()
