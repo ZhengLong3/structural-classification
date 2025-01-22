@@ -67,6 +67,32 @@ class PlaneNode:
         rotmat = np.column_stack((vector1 / extent[0], vector2 / extent[1], np.cross(vector1 / extent[0], vector2 / extent[1])))
         return cls(center, extent, rotmat)
 
+    @classmethod
+    def create_from_corners(cls, corner1: tuple[float, float, float], corner2: tuple[float, float, float], corner3: tuple[float, float, float], corner4: tuple[float, float, float]) -> PlaneNode:
+        """
+        Creates a PlaneNode with the four corners of the rectangle it should represent.
+        The center will be the average of the four corners' coordinates and the edges will be the average of the two parallel sides.
+        The corners should be in clockwise/anticlockwise order.
+
+        Parameters:
+            corner1: The first corner as a tuple of three floats.
+            corner2: The second corner as a tuple of three floats. It should be adjacent to the first corner.
+            corner3: The third corner as a tuple of three floats. It should be adjacent to the second corner.
+            corner4: The fourth corner as a tuple of three floats. It should be adjacent to the first and third corner.
+
+        Returns:
+            A PlaneNode representing the rectangle described by the corners.
+        """
+        c1 = np.array(corner1, dtype=np.float64)
+        c2 = np.array(corner2, dtype=np.float64)
+        c3 = np.array(corner3, dtype=np.float64)
+        c4 = np.array(corner4, dtype=np.float64)
+        center = (c1 + c2 + c3 + c4) / 4.0
+        vector1 = (c2 - c1 + c3 - c4) / 2
+        vector2 = (c4 - c1 + c3 - c2) / 2
+        return cls.create_from_vectors(center, vector1, vector2)
+
+
     def get_vectors(self) -> tuple[tuple[float, float, float], tuple[float, float, float], tuple[float, float, float]]:
         """
         Returns the center, and two side vectors which describes the rectangle.
@@ -168,16 +194,17 @@ class PlaneNode:
         Returns:
             Angle between the two planes, between 0 and pi radians.
         """
+        SCALING = 100
         normal1 = self.normal
         # I think the angle is correct if we choose 1 normal to be towards the other center, and one away.
-        if np.linalg.norm(self.center + normal1 - other.center) > np.linalg.norm(self.center - normal1 - other.center):
+        if np.linalg.norm(self.center + normal1 / SCALING - other.center) > np.linalg.norm(self.center - normal1 / SCALING - other.center):
             # normal of plane 1 to be towards center of plane 2.
             normal1 = - normal1
         normal2 = other.normal
-        if np.linalg.norm(other.center + normal2 - self.center) < np.linalg.norm(other.center - normal2 - self.center):
+        if np.linalg.norm(other.center + normal2 / SCALING - self.center) < np.linalg.norm(other.center - normal2 / SCALING - self.center):
             # normal of plane 2 to be away from the center of plane 1.
-            normal1 = - normal1
-        return math.acos(np.dot(self.normal, other.normal))
+            normal2 = - normal2
+        return math.acos(np.dot(normal1, normal2))
 
     def get_overlap_vector(self, other: PlaneNode) -> np.ndarray:
         """
@@ -355,7 +382,7 @@ class StructureGraph:
         for node in self.graph.nodes:
             faces.append(node.get_corners())
             colours.append(node.color)
-        poly = Poly3DCollection(faces)
+        poly = Poly3DCollection(faces, zsort="min")
         poly.set_facecolor(colours)
         ax.add_collection3d(poly)
         ax.set_aspect("equal")
@@ -368,8 +395,8 @@ if __name__ == "__main__":
     # graph.to_json("output/structure.json")
     # graph = StructureGraph.create_from_json("data/structures.json")
     with open("data/structures.json", "r") as f:
-        structure_list = json.load(f)
-    graph = StructureGraph.create_from_node_list(map(lambda x: PlaneNode.create_from_vectors(*x), structure_list[5]["rects"]))
+        rectangles = json.load(f)[6]["rects"]
+    graph = StructureGraph.create_from_node_list(map(lambda x: PlaneNode.create_from_vectors(*x), rectangles))
     graph.visualise_graph()
     graph.visualise_planes()
     plt.show()
