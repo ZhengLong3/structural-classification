@@ -156,11 +156,14 @@ class PlaneNode:
             corners.append(self.center + self.extent[0] * self.vec1 * scalar[0] + self.extent[1] * self.vec2 * scalar[1])
         return np.vstack(corners)
     
-    def get_angle_to(self, other) -> float:
+    def get_angle_to(self, other: PlaneNode) -> float:
         """
         Returns the angle between this plane and another plane (assuming planes are infinite).
         The angle returned will be the angle from the center of a plane to the intersection, to the center of the other plane.
         This attempts to be the intuitive angle between two connected real-life planes.
+
+        Parameters:
+            other: The other PlaneNode to compute the angle to.
 
         Returns:
             Angle between the two planes, between 0 and pi radians.
@@ -176,40 +179,18 @@ class PlaneNode:
             normal1 = - normal1
         return math.acos(np.dot(self.normal, other.normal))
 
-
-class Edge:
-    def __init__(self, node1: PlaneNode, node2: PlaneNode) -> None:
-        self.node1 = node1
-        self.node2 = node2
-
-    def __str__(self) -> str:
-        return f"[Node1: {str(self.node1)}, Node2: {str(self.node2)}]"
-    
-    def __repr__(self):
-        return str(self)
-    
-    def get_angle(self) -> float:
+    def get_overlap_vector(self, other: PlaneNode) -> np.ndarray:
         """
-        Returns the angle between the two connected planes.
-        The angle returned will be the angle from the center of a plane to the intersection, to the center of the other plane.
-        This attempts to be the intuitive angle between two connected real-life planes.
+        Get the direction of the line of intersection between the PlaneNode itself and another PlaneNode.
+        This assumes the planes are infinite, so most likely there will be an intersection.
+
+        Parameters:
+            other: The other PlaneNode to compute the overlap vector.
 
         Returns:
-            Angle between the two planes, between 0 and pi radians.
+            The direction vector of the intersecting line.
         """
-        normal1 = self.node1.normal
-        # I think the angle is correct if we choose 1 normal to be towards the other center, and one away.
-        if np.linalg.norm(self.node1.center + normal1 - self.node2.center) > np.linalg.norm(self.node1.center - normal1 - self.node2.center):
-            # normal of plane 1 to be towards center of plane 2.
-            normal1 = - normal1
-        normal2 = self.node2.normal
-        if np.linalg.norm(self.node2.center + normal2 - self.node1.center) < np.linalg.norm(self.node2.center - normal2 - self.node1.center):
-            # normal of plane 2 to be away from the center of plane 1.
-            normal1 = - normal1
-        return math.acos(np.dot(self.node1.normal, self.node2.normal))
-    
-    def get_overlap_vector(self) -> np.ndarray:
-        return np.cross(self.node1.normal, self.node2.normal)
+        return np.cross(self.normal, other.normal)
         
 
 class StructureGraph:
@@ -303,8 +284,7 @@ class StructureGraph:
         for i in range(len(node_list) - 1):
             for j in range(i + 1, len(node_list)):
                 if node_list[i].check_overlap(node_list[j]):
-                    edge = Edge(node_list[i], node_list[j])
-                    self.graph.add_edge(node_list[i], node_list[j], object=edge)
+                    self.graph.add_edge(node_list[i], node_list[j])
 
     def add_node(self, node: PlaneNode) -> None:
         """
@@ -341,8 +321,9 @@ class StructureGraph:
             labels[node] = round(node.get_normalised_area(self._max_size), 2)
             sizes.append(node.get_area() * 300)
             colors.append(node.color)
+        edge: tuple[PlaneNode, PlaneNode]
         for edge in self.graph.edges:
-            edge_labels[edge] = round(self.graph.edges[edge]["object"].get_angle(), 2)
+            edge_labels[edge] = round(edge[0].get_angle_to(edge[1]), 2)
         pos = nx.spring_layout(self.graph)
         nx.draw(self.graph, pos, labels=labels, with_labels=True, node_color=colors)
         nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=edge_labels)
