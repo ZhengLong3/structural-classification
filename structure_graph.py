@@ -389,15 +389,21 @@ class StructureGraph:
 
 
 if __name__ == "__main__":
+    # loading from gaussian model and saving to file.
     # gaussian = GaussianModel(3)
-    # gaussian.load_ply("./data/book_close_atom.ply")
+    # gaussian.load_ply("./data/3plane_atom.ply")
     # graph = StructureGraph.create_from_gaussians(gaussian)
     # graph.to_json("output/structure.json")
-    # graph = StructureGraph.create_from_json("data/structures.json")
+
+    # loading from structures
+    structures = {}
     with open("data/structures.json", "r") as f:
-        rectangles = json.load(f)[6]["rects"]
-    graph = StructureGraph.create_from_node_list(map(lambda x: PlaneNode.create_from_vectors(*x), rectangles))
+        structure_list = json.load(f)
+    for structure in structure_list:
+        structures[structure["name"]] = structure["rects"]
+    graph = StructureGraph.create_from_node_list(map(lambda x: PlaneNode.create_from_vectors(*x), structures["2plane_atom"]))
     graph.visualise_graph()
     graph.visualise_planes()
     plt.show()
+
     # graph.visualise_planes_o3d()
