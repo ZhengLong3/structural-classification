@@ -263,7 +263,7 @@ class StructureGraph:
         oboxes = pcd.detect_planar_patches(
             normal_variance_threshold_deg=45,
             coplanarity_deg=75,
-            outlier_ratio=0.5,
+            outlier_ratio=0.2,
             min_plane_edge_length=0,
             min_num_points=0,
             search_param=o3d.geometry.KDTreeSearchParamKNN(knn=30))
@@ -391,7 +391,7 @@ class StructureGraph:
 if __name__ == "__main__":
     # loading from gaussian model and saving to file.
     # gaussian = GaussianModel(3)
-    # gaussian.load_ply("./data/3plane_atom.ply")
+    # gaussian.load_ply("./data/skewed_grid_atom.ply")
     # graph = StructureGraph.create_from_gaussians(gaussian)
     # graph.to_json("output/structure.json")
 
