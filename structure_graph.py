@@ -387,23 +387,56 @@ class StructureGraph:
         ax.add_collection3d(poly)
         ax.set_aspect("equal")
 
+    def get_adjacency_matrix(self) -> np.ndarray:
+        """
+        Gets the adjacency matrix which represents the graph. The matrix is a symmetric matrix with the diagonals representing the weights of the nodes and the other entries representing the weights of the edge connecting two nodes if such an edge exist, and -1 otherwise.
+
+        Returns:
+            An ndarray for the adjacency matrix.
+        """
+        node_dict: dict[PlaneNode, int] = {}
+        current_id = 0
+        node: PlaneNode
+        max_area = 0
+        for node in self.graph.nodes:
+            node_dict[node] = current_id
+            max_area = max(max_area, node.get_area())
+            current_id += 1
+        output = np.ones((len(node_dict), len(node_dict)))
+        output = -output
+        for node in node_dict:
+            output[node_dict[node], node_dict[node]] = node.get_normalised_area(max_area)
+        edge: tuple[PlaneNode, PlaneNode]
+        for edge in self.graph.edges:
+            node1_id = node_dict[edge[0]]
+            node2_id = node_dict[edge[1]]
+            angle = edge[0].get_angle_to(edge[1])
+            output[node1_id, node2_id] = angle
+            output[node2_id, node1_id] = angle
+        return output
+
 
 if __name__ == "__main__":
-    # loading from gaussian model and saving to file.
-    # gaussian = GaussianModel(3)
-    # gaussian.load_ply("./data/skewed_grid_atom.ply")
-    # graph = StructureGraph.create_from_gaussians(gaussian)
-    # graph.to_json("output/structure.json")
-
-    # loading from structures
-    structures = {}
-    with open("data/structures.json", "r") as f:
-        structure_list = json.load(f)
-    for structure in structure_list:
-        structures[structure["name"]] = structure["rects"]
-    graph = StructureGraph.create_from_node_list(map(lambda x: PlaneNode.create_from_vectors(*x), structures["2plane_atom"]))
-    graph.visualise_graph()
-    graph.visualise_planes()
-    plt.show()
+    def load_from_gaussian_model_example():
+        # loading from gaussian model and saving to file.
+        gaussian = GaussianModel(3)
+        gaussian.load_ply("./data/skewed_grid_atom.ply")
+        graph = StructureGraph.create_from_gaussians(gaussian)
+        graph.to_json("output/structure.json")
+        graph.visualise_graph()
+        graph.visualise_planes()
+        plt.show()
+    
+    def load_from_structure_example():
+        # loading from structures
+        structures = {}
+        with open("data/structures.json", "r") as f:
+            structure_list = json.load(f)
+        for structure in structure_list:
+            structures[structure["name"]] = structure["rects"]
+        graph = StructureGraph.create_from_node_list(map(lambda x: PlaneNode.create_from_vectors(*x), structures["House"]))
+        graph.visualise_graph()
+        graph.visualise_planes()
+        plt.show()
 
     # graph.visualise_planes_o3d()
