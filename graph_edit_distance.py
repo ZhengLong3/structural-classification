@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import total_ordering
 from queue import PriorityQueue
 
@@ -108,21 +109,23 @@ class SimpleGraph:
         return SimpleGraph(tuple(list_node_list), new_dict)
 
 
-def dumb_heuristic(current: np.ndarray, goal: np.ndarray):
-    return np.abs(np.sum(current) - np.sum(goal))
+def dumb_heuristic(current: SimpleGraph, goal: SimpleGraph):
+    pass
 
 def transition_function(current: np.ndarray) -> list[tuple[float, np.ndarray]]:
     """
     Returns a list of (cost, result) tuples of possible edit actions given the current graph. The list of actions and their costs are as follows:
     1. Adding an edge (costs the weight of the edge)
     2. Removing an edge (costs the weight of the edge)
-    3. Adding a vertex (costs the weight of the vertex)
-    4. Removing a vertex (costs the weight of the vertex and the vertex must be disconnected)
-    5. Moving the position of a node in the adjacency matrix (costs 0)
+    3. Modifying the weight of an edge (costs the absolute difference in weights)
+    4. Adding a vertex (costs the weight of the vertex)
+    5. Removing a vertex (costs the weight of the vertex and the vertex must be disconnected)
+    6. Modifying the weight of a vertex (costs the absolute difference in weights)
+    7. Moving the position of a node in the graph (costs 0)
 
     Returns:
         A list of (cost, result) tuples.
     """
 
-def a_star_graph_edit_distance(start: np.ndarray, goal: np.ndarray) -> float:
+def a_star_graph_edit_distance(start: np.ndarray, goal: np.ndarray, heuristic: Callable[[SimpleGraph, SimpleGraph], float]) -> float:
     queue = PriorityQueue()
