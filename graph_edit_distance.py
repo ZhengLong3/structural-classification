@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import json
+
 from collections.abc import Callable
 from functools import total_ordering
 from queue import PriorityQueue
 
+import networkx as nx
 import numpy as np
 
 from structure_graph import StructureGraph
+from structure_graph import PlaneNode
 
 @total_ordering
 class PriorityData:
@@ -17,10 +21,10 @@ class PriorityData:
 
     def __eq__(self, other: PriorityData):
         return self.gn + self.hn == other.gn + other.hn
-    
+
     def __lt__(self, other: PriorityData):
         return self.gn + self.hn < other.gn + other.hn
-    
+
 class SimpleGraph:
     def __init__(self, node_list: tuple[float], edge_list: dict[tuple[int, int], float]) -> SimpleGraph:
         """
@@ -62,7 +66,7 @@ class SimpleGraph:
             A new SimpleGraph with the new node added.
         """
         return SimpleGraph(self.node_list + (value,), self.edge_list.copy())
-    
+
     def check_deletable(self, index: int) -> bool:
         """
         Checks whether a node can be deleted. A node can be deleted only if it has no edges connected to it.
@@ -74,7 +78,7 @@ class SimpleGraph:
             if key[0] == index or key[1] == index:
                 return False
         return True
-    
+
     def delete_node(self, index: int) -> SimpleGraph:
         """
         Deletes the node at with position at index. Can only be done if no edges are connected to the deleted node.
@@ -85,7 +89,7 @@ class SimpleGraph:
         new_graph = self.swap_labels(index, last_index)
         new_graph.node_list = new_graph.node_list[:-1]
         return new_graph
-    
+
     def insert_edge(self, node1: int, node2: int, value: float) -> SimpleGraph:
         """
         Creates a new SimpleGraph with a new edge added.
@@ -118,7 +122,7 @@ class SimpleGraph:
         if sorted_key in new_set:
             del new_set[sorted_key]
         return SimpleGraph(self.node_list, new_set)
-    
+
     def swap_labels(self, node1: int, node2: int) -> SimpleGraph:
         """
         Creates a new SimpleGraph with the positions of two nodes swapped in the node_list.
@@ -190,5 +194,46 @@ def transition_function(current: SimpleGraph, goal: SimpleGraph) -> list[tuple[f
             actions.append((current.node_list[i], current.delete_node(i)))
 
 
+    actions = []
+
+    # # Shuffling the order of the nodes
+    # for i in range(current.get_num_nodes() - 1):
+    #     for j in range(i + 1, current.get_num_nodes()):
+    #         actions.append((0, current.swap_labels(i, j)))
+
+    # Consider adding nodes if there are more nodes in the goal graph compared to the current graph.
+    if current.get_num_nodes() < goal.get_num_nodes():
+        for value in goal.node_list:
+            actions.append((value, current.insert_node(value)))
+    
+    # Consider deleting nodes if there are more nodes in the current graph compared to the goal graph.
+    if current.get_num_nodes() > goal.get_num_nodes():
+        for i in range(current.get_num_nodes()):
+            actions.append((current.node_list[i], current.delete_node(i)))
+
+
 def a_star_graph_edit_distance(start: np.ndarray, goal: np.ndarray, heuristic: Callable[[SimpleGraph, SimpleGraph], float]) -> float:
     queue = PriorityQueue()
+
+def node_subst_cost(node1, node2):
+    return abs(node1["area"] - node2["area"])
+
+def node_ins_del_cost(node):
+    return node["area"]
+
+def edge_subst_cost(edge1, edge2):
+    return abs(edge1["angle"] - edge2["angle"])
+
+def edge_ins_del_cost(edge):
+    return edge["angle"]
+
+
+if __name__ == "__main__":
+    structures = {}
+    with open("data/structures.json", "r") as f:
+        structure_list = json.load(f)
+    for structure in structure_list:
+        structures[structure["name"]] = structure["rects"]
+    graph1 = StructureGraph.create_from_node_list(map(lambda x: PlaneNode.create_from_vectors(*x), structures["House"]))
+    graph2 = StructureGraph.create_from_node_list(map(lambda x: PlaneNode.create_from_vectors(*x), structures["cube"]))
+    print(nx.graph_edit_distance(graph1.get_simple_graph(), graph1.get_simple_graph(), node_subst_cost=node_subst_cost, node_del_cost=node_ins_del_cost, node_ins_cost=node_ins_del_cost, edge_subst_cost=edge_subst_cost, edge_ins_cost=edge_ins_del_cost, edge_del_cost=edge_ins_del_cost))

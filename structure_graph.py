@@ -29,7 +29,7 @@ class PlaneNode:
 
     def __str__(self) -> str:
         return f"[Center: {str(self.center)}, Extent: {str(self.extent)}, Rotation Matrix: {str(self.rotmat)}]"
-    
+
     @classmethod
     def create_from_obox(cls, obox: o3d.geometry.OrientedBoundingBox) -> PlaneNode:
         """
@@ -37,9 +37,9 @@ class PlaneNode:
 
         Parameters:
             obox: Open3D OrientedBoundingBox object describing a rectangular plane.
-        
+
         Returns:
-            A PlaneNode describing the rectangular plane.    
+            A PlaneNode describing the rectangular plane.
         """
         return cls(obox.center, obox.extent, obox.R)
 
@@ -101,7 +101,7 @@ class PlaneNode:
             Tuple containing the center (length 3 tuple), and the two side vectors (also length 3 tuples).
         """
         return (tuple(self.center), tuple(self.rotmat[:, 0] * self.extent[0]), tuple(self.rotmat[:, 1] * self.extent[1]))
-    
+
     def get_area(self) -> float:
         """
         Returns the area of the rectangular plane that the node represents.
@@ -110,7 +110,7 @@ class PlaneNode:
         Returns:
             The area of the plane.
         """
-        return self.extent[0] * self.extent[1]
+        return (self.extent[0] * self.extent[1]).item()
 
     def get_normalised_area(self, max_area: float) -> float:
         """
@@ -118,7 +118,7 @@ class PlaneNode:
 
         Parameters:
             max_area: The maximum area of a node in a StructureGraph
-        
+
         Returns:
             The normalised area.
         """
@@ -159,7 +159,7 @@ class PlaneNode:
         b_eq = [other.center[0] - self.center[0], other.center[1] - self.center[1], other.center[2] - self.center[2]]
         result = scipy.optimize.linprog(objective_function, A_upp, b_upp, A_eq, b_eq, (None, None))
         return result.success
-    
+
     def get_obox(self) -> o3d.geometry.OrientedBoundingBox:
         """
         Returns the plane as an Open3D OrientedBoundingBox.
@@ -168,7 +168,7 @@ class PlaneNode:
             OrientedBoundingBox of the rectangular plane.
         """
         return o3d.geometry.OrientedBoundingBox(center = np.expand_dims(self.center, -1), R = self.rotmat, extent = np.expand_dims(self.extent, -1))
-    
+
     def get_corners(self) -> np.ndarray[np.float64[4, 3]]:
         """
         Returns the coordinates of the rectangle's corners in a 3 by 4 array, where each column is the (x, y, z) coordinates of a corner.
@@ -181,7 +181,7 @@ class PlaneNode:
         for scalar in scalars:
             corners.append(self.center + self.extent[0] * self.vec1 * scalar[0] + self.extent[1] * self.vec2 * scalar[1])
         return np.vstack(corners)
-    
+
     def get_angle_to(self, other: PlaneNode) -> float:
         """
         Returns the angle between this plane and another plane (assuming planes are infinite).
@@ -218,7 +218,7 @@ class PlaneNode:
             The direction vector of the intersecting line.
         """
         return np.cross(self.normal, other.normal)
-        
+
 
 class StructureGraph:
     def __init__(self) -> None:
@@ -236,12 +236,12 @@ class StructureGraph:
         for edge in self.edges:
             output += str(edge) + " "
         return output
-    
+
     @classmethod
     def create_from_gaussians(cls, gaussian: GaussianModel, device: str = "CPU:0") -> StructureGraph:
         """
         Extracts the planes in a Gaussian Model using Open3D and creates a structure graph based on the planes.
-        
+
         Parameters:
             gaussian: Gaussian Model containing the object to be analysed.
             device: The device to use to extract the planes. Default is "CPU:0".
@@ -305,7 +305,7 @@ class StructureGraph:
         with open(path, "r") as f:
             rectangle_list = json.load(f)
         return cls.create_from_node_list(map(lambda x: PlaneNode.create_from_vectors(*x) ,rectangle_list))
-    
+
     def populate_edge_list(self) -> None:
         node_list: list[PlaneNode] = list(self.graph.nodes)
         for i in range(len(node_list) - 1):
@@ -387,6 +387,19 @@ class StructureGraph:
         ax.add_collection3d(poly)
         ax.set_aspect("equal")
 
+    def get_max_node_area(self) -> float:
+        """
+        Gets the maximum area of the nodes in this StructureGraph.
+
+        Returns:
+            Maximum area of the nodes in this StructureGraph.
+        """
+        node: PlaneNode
+        max_area = 0
+        for node in self.graph.nodes:
+            max_area = max(max_area, node.get_area())
+        return max_area
+
     def get_adjacency_matrix(self) -> np.ndarray:
         """
         Gets the adjacency matrix which represents the graph. The matrix is a symmetric matrix with the diagonals representing the weights of the nodes and the other entries representing the weights of the edge connecting two nodes if such an edge exist, and -1 otherwise.
@@ -415,6 +428,24 @@ class StructureGraph:
             output[node2_id, node1_id] = angle
         return output
 
+    def get_simple_graph(self) -> nx.Graph:
+        """
+        This returns a graph which preserves the topology and weights of the graph, but leaves out the other details of the planes.
+        """
+        new_graph = nx.Graph()
+        max_area = self.get_max_node_area()
+        node_dict = {}
+        current_index = 0
+        node: PlaneNode
+        for node in self.graph.nodes:
+            node_dict[node] = current_index
+            new_graph.add_node(current_index, area=node.get_normalised_area(max_area))
+            current_index += 1
+        edge: tuple[PlaneNode, PlaneNode]
+        for edge in self.graph.edges:
+            new_graph.add_edge(node_dict[edge[0]], node_dict[edge[1]], angle=edge[0].get_angle_to(edge[1]))
+        return new_graph
+
 
 if __name__ == "__main__":
     def load_from_gaussian_model_example():
@@ -426,7 +457,7 @@ if __name__ == "__main__":
         graph.visualise_graph()
         graph.visualise_planes()
         plt.show()
-    
+
     def load_from_structure_example():
         # loading from structures
         structures = {}
