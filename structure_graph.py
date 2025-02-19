@@ -18,7 +18,7 @@ def get_random_color() -> np.ndarray[np.float64[3]]:
 
 
 class PlaneNode:
-    def __init__(self, center: list, extent: list, rotmat: list[list]) -> None:
+    def __init__(self, center: list, extent: list, rotmat: list[list], factor: float = 1.00) -> None:
         self.center = np.array(center, np.float64)
         self.extent = np.array(extent, np.float64)
         self.rotmat = np.array(rotmat, np.float64)
@@ -31,17 +31,18 @@ class PlaneNode:
         return f"[Center: {str(self.center)}, Extent: {str(self.extent)}, Rotation Matrix: {str(self.rotmat)}]"
 
     @classmethod
-    def create_from_obox(cls, obox: o3d.geometry.OrientedBoundingBox) -> PlaneNode:
+    def create_from_obox(cls, obox: o3d.geometry.OrientedBoundingBox, factor: float = 1.00) -> PlaneNode:
         """
         Create a PlaneNode object using an Open3D OrientedBoundingBox object.
 
         Parameters:
             obox: Open3D OrientedBoundingBox object describing a rectangular plane.
+            factor: Float to scale extent by, since planes might not overlap otherwise.
 
         Returns:
             A PlaneNode describing the rectangular plane.
         """
-        return cls(obox.center, obox.extent, obox.R)
+        return cls(obox.center, obox.extent, obox.R, factor)
 
     @classmethod
     def create_from_vectors(cls, center: tuple[float, float, float], side1: tuple[float, float, float], side2: tuple[float, float, float]):
@@ -263,12 +264,12 @@ class StructureGraph:
         oboxes = pcd.detect_planar_patches(
             normal_variance_threshold_deg=45,
             coplanarity_deg=75,
-            outlier_ratio=0.2,
+            outlier_ratio=0.4,
             min_plane_edge_length=0,
             min_num_points=0,
             search_param=o3d.geometry.KDTreeSearchParamKNN(knn=30))
         for obox in oboxes:
-            structure_graph.add_node(PlaneNode.create_from_obox(obox))
+            structure_graph.add_node(PlaneNode.create_from_obox(obox, 1.1))
 
         structure_graph.populate_edge_list()
 
@@ -290,6 +291,10 @@ class StructureGraph:
             structure_graph.add_node(node)
         structure_graph.populate_edge_list()
         return structure_graph
+    
+    @classmethod
+    def create_from_vector_list(cls, vector_list: list[list[float]]):
+        return StructureGraph.create_from_node_list(map(lambda x: PlaneNode.create_from_vectors(*x), vector_list))
 
     @classmethod
     def create_from_json(cls, path: str) -> StructureGraph:
@@ -451,7 +456,7 @@ if __name__ == "__main__":
     def load_from_gaussian_model_example():
         # loading from gaussian model and saving to file.
         gaussian = GaussianModel(3)
-        gaussian.load_ply("./data/skewed_grid_atom.ply")
+        gaussian.load_ply("./data/rectangle.ply")
         graph = StructureGraph.create_from_gaussians(gaussian)
         graph.to_json("output/structure.json")
         graph.visualise_graph()
@@ -465,9 +470,11 @@ if __name__ == "__main__":
             structure_list = json.load(f)
         for structure in structure_list:
             structures[structure["name"]] = structure["rects"]
-        graph = StructureGraph.create_from_node_list(map(lambda x: PlaneNode.create_from_vectors(*x), structures["House"]))
+        graph = StructureGraph.create_from_node_list(map(lambda x: PlaneNode.create_from_vectors(*x), structures["small_square"]))
         graph.visualise_graph()
         graph.visualise_planes()
         plt.show()
 
     # graph.visualise_planes_o3d()
+    # load_from_gaussian_model_example()
+    # load_from_structure_example()
