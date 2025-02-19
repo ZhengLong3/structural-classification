@@ -33,6 +33,24 @@ class SimpleGraph:
         self.node_list: tuple[float] = node_list
         self.edge_list: dict[tuple[int, int], float] = edge_list
 
+    def __eq__(self, other: SimpleGraph) -> bool:
+        """
+        Two SimpleGraphs are equal if the nodes have the same weight in the same order and contain the same edges with the same weights.
+        """
+        if self.get_num_nodes() != other.get_num_nodes():
+            return False
+        if self.get_num_edges() != other.get_num_edges():
+            return False
+        for a, b in zip(sorted(self.node_list), sorted(other.node_list)):
+            if abs(a - b) > 0.001:
+                return False
+        for key in self.edge_list:
+            if key not in other.edge_list:
+                return False
+            if abs(self.edge_list[key] - other.edge_list[key]) > 0.001:
+                return False
+        return True
+
     def insert_node(self, value: float) -> SimpleGraph:
         """
         Creates a new SimpleGraph with a new node added to the back of the node_list.
@@ -83,6 +101,23 @@ class SimpleGraph:
         new_dict = self.edge_list.copy()
         new_dict[sorted((node1, node2))] = value
         return SimpleGraph(self.node_list, new_dict)
+
+    def delete_edge(self, node1: int, node2: int) -> SimpleGraph:
+        """
+        Creates a new SimpleGraph with a deleted edge.
+
+        Parameters:
+            node1: The position of the first node of the edge in node_list.
+            node2: The position of the second node of the edge in node_list.
+
+        Returns:
+            A new SimpleGraph with the edge deleted.
+        """
+        sorted_key = sorted((node1, node2))
+        new_set = self.edge_list.copy()
+        if sorted_key in new_set:
+            del new_set[sorted_key]
+        return SimpleGraph(self.node_list, new_set)
     
     def swap_labels(self, node1: int, node2: int) -> SimpleGraph:
         """
@@ -108,11 +143,17 @@ class SimpleGraph:
             new_dict[sorted(tuple(key_copy))] = self.edge_list[key]
         return SimpleGraph(tuple(list_node_list), new_dict)
 
+    def get_num_nodes(self) -> int:
+        return len(self.node_list)
+
+    def get_num_edges(self) -> int:
+        return len(self.edge_list)
+
 
 def dumb_heuristic(current: SimpleGraph, goal: SimpleGraph):
     pass
 
-def transition_function(current: np.ndarray) -> list[tuple[float, np.ndarray]]:
+def transition_function(current: SimpleGraph, goal: SimpleGraph) -> list[tuple[float, SimpleGraph]]:
     """
     Returns a list of (cost, result) tuples of possible edit actions given the current graph. The list of actions and their costs are as follows:
     1. Adding an edge (costs the weight of the edge)
@@ -121,11 +162,33 @@ def transition_function(current: np.ndarray) -> list[tuple[float, np.ndarray]]:
     4. Adding a vertex (costs the weight of the vertex)
     5. Removing a vertex (costs the weight of the vertex and the vertex must be disconnected)
     6. Modifying the weight of a vertex (costs the absolute difference in weights)
-    7. Moving the position of a node in the graph (costs 0)
+    7. Moving the position of a node in the graph (costs 0) -> Might end up not allowing this
+
+    Parameters:
+        current: The current SimpleGraph to generate children of.
+        goal: The final SimpleGraph to reach.
 
     Returns:
         A list of (cost, result) tuples.
     """
+
+    actions = []
+
+    # # Shuffling the order of the nodes
+    # for i in range(current.get_num_nodes() - 1):
+    #     for j in range(i + 1, current.get_num_nodes()):
+    #         actions.append((0, current.swap_labels(i, j)))
+
+    # Consider adding nodes if there are more nodes in the goal graph compared to the current graph.
+    if current.get_num_nodes() < goal.get_num_nodes():
+        for value in goal.node_list:
+            actions.append((value, current.insert_node(value)))
+    
+    # Consider deleting nodes if there are more nodes in the current graph compared to the goal graph.
+    if current.get_num_nodes() > goal.get_num_nodes():
+        for i in range(current.get_num_nodes()):
+            actions.append((current.node_list[i], current.delete_node(i)))
+
 
 def a_star_graph_edit_distance(start: np.ndarray, goal: np.ndarray, heuristic: Callable[[SimpleGraph, SimpleGraph], float]) -> float:
     queue = PriorityQueue()
