@@ -21,6 +21,7 @@ class PlaneNode:
     def __init__(self, center: list, extent: list, rotmat: list[list], factor: float = 1.00) -> None:
         self.center = np.array(center, np.float64)
         self.extent = np.array(extent, np.float64)
+        self.extent *= factor
         self.rotmat = np.array(rotmat, np.float64)
         self.vec1 = np.array(rotmat[:, 0], np.float64)
         self.vec2 = np.array(rotmat[:, 1], np.float64)
@@ -45,7 +46,7 @@ class PlaneNode:
         return cls(obox.center, obox.extent, obox.R, factor)
 
     @classmethod
-    def create_from_vectors(cls, center: tuple[float, float, float], side1: tuple[float, float, float], side2: tuple[float, float, float]):
+    def create_from_vectors(cls, center: tuple[float, float, float], side1: tuple[float, float, float], side2: tuple[float, float, float], factor: float = 1.0):
         """
         Creates a PlaneNode with a center and two vectors describing the direction of the two sides. Gram-Schmidt orthogonalisation is done in the order of side1 then side2 to obtain orthogonal vectors.
 
@@ -53,6 +54,7 @@ class PlaneNode:
             center: Position of the center of the rectangle.
             side1: 3D vector in the form of a tuple describing the length and direction of the first side.
             side2: 3D vector in the form of a tuple describing the length and direction of the second side.
+            factor: Float to scale extent by, since planes might not overlap otherwise.
 
         Returns:
             A PlaneNode described by the two side vectors and center.
@@ -66,7 +68,7 @@ class PlaneNode:
         extent[2] = 1
         center = np.array(center)
         rotmat = np.column_stack((vector1 / extent[0], vector2 / extent[1], np.cross(vector1 / extent[0], vector2 / extent[1])))
-        return cls(center, extent, rotmat)
+        return cls(center, extent, rotmat, factor)
 
     @classmethod
     def create_from_corners(cls, corner1: tuple[float, float, float], corner2: tuple[float, float, float], corner3: tuple[float, float, float], corner4: tuple[float, float, float]) -> PlaneNode:
@@ -239,13 +241,14 @@ class StructureGraph:
         return output
 
     @classmethod
-    def create_from_gaussians(cls, gaussian: GaussianModel, device: str = "CPU:0") -> StructureGraph:
+    def create_from_gaussians(cls, gaussian: GaussianModel, device: str = "CPU:0", factor: float = 1.1) -> StructureGraph:
         """
         Extracts the planes in a Gaussian Model using Open3D and creates a structure graph based on the planes.
 
         Parameters:
             gaussian: Gaussian Model containing the object to be analysed.
             device: The device to use to extract the planes. Default is "CPU:0".
+            factor: Float to scale extent by, since planes might not overlap otherwise.
 
         Returns:
             StructureGraph for the planes detected in the GaussianModel.
@@ -262,14 +265,14 @@ class StructureGraph:
         pcd.orient_normals_consistent_tangent_plane(10)
         pcd = pcd.to_legacy()
         oboxes = pcd.detect_planar_patches(
-            normal_variance_threshold_deg=45,
+            normal_variance_threshold_deg=30,
             coplanarity_deg=75,
             outlier_ratio=0.4,
             min_plane_edge_length=0,
             min_num_points=0,
             search_param=o3d.geometry.KDTreeSearchParamKNN(knn=30))
         for obox in oboxes:
-            structure_graph.add_node(PlaneNode.create_from_obox(obox, 1.1))
+            structure_graph.add_node(PlaneNode.create_from_obox(obox, factor=factor))
 
         structure_graph.populate_edge_list()
 
@@ -327,6 +330,20 @@ class StructureGraph:
         """
         self.graph.add_node(node)
         self._max_size = max(self._max_size, node.get_area())
+
+    def filter_by_size(self, threshold: float) -> None:
+        """
+        Remove nodes below a certain weight value.
+
+        Parameters:
+            threshold: Largest weight value required to not be removed.
+        """
+        max_area = self.get_max_node_area()
+        node_list: list[PlaneNode] = list(self.graph.nodes)
+        for node in node_list:
+            if node.get_normalised_area(max_area) < threshold:
+                self.graph.remove_node(node)
+
 
     def to_json(self, path: str) -> None:
         """
@@ -456,8 +473,9 @@ if __name__ == "__main__":
     def load_from_gaussian_model_example():
         # loading from gaussian model and saving to file.
         gaussian = GaussianModel(3)
-        gaussian.load_ply("./data/rectangle.ply")
-        graph = StructureGraph.create_from_gaussians(gaussian)
+        gaussian.load_ply("./data/kite_prism.ply")
+        graph = StructureGraph.create_from_gaussians(gaussian, factor=1.3)
+        graph.filter_by_size(0.3)
         graph.to_json("output/structure.json")
         graph.visualise_graph()
         graph.visualise_planes()
@@ -470,11 +488,11 @@ if __name__ == "__main__":
             structure_list = json.load(f)
         for structure in structure_list:
             structures[structure["name"]] = structure["rects"]
-        graph = StructureGraph.create_from_node_list(map(lambda x: PlaneNode.create_from_vectors(*x), structures["small_square"]))
+        graph = StructureGraph.create_from_node_list(map(lambda x: PlaneNode.create_from_vectors(*x), structures["cleaned_book"]))
         graph.visualise_graph()
         graph.visualise_planes()
         plt.show()
 
     # graph.visualise_planes_o3d()
-    # load_from_gaussian_model_example()
+    load_from_gaussian_model_example()
     # load_from_structure_example()

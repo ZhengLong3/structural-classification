@@ -8,9 +8,10 @@ from queue import PriorityQueue
 
 import networkx as nx
 import numpy as np
+import torch
 
 from structure_graph import StructureGraph
-from structure_graph import PlaneNode
+import utils
 
 @total_ordering
 class PriorityData:
@@ -237,8 +238,10 @@ if __name__ == "__main__":
     # graph1 = StructureGraph.create_from_node_list(map(lambda x: PlaneNode.create_from_vectors(*x), structures["House"]))
     # graph2 = StructureGraph.create_from_node_list(map(lambda x: PlaneNode.create_from_vectors(*x), structures["cube"]))
     # print(nx.graph_edit_distance(graph1.get_simple_graph(), graph1.get_simple_graph(), node_subst_cost=node_subst_cost, node_del_cost=node_ins_del_cost, node_ins_cost=node_ins_del_cost, edge_subst_cost=edge_subst_cost, edge_ins_cost=edge_ins_del_cost, edge_del_cost=edge_ins_del_cost))
-    name_list = ["big_square", "small_square", "rectangle", "slanted_big_square"]
+    name_list = ["big_square", "small_square", "rectangle", "slanted_big_square", "prism", "3plane_atom", "cleaned_tetrahedron", "square_pyramid", "grid_atom", "skewed_grid_atom", "pentagon", "house", "kite", "triangular_bipyramid", "tent", "kite_prism"]
     graph_list = list(map(lambda x: StructureGraph.create_from_vector_list(structures[x]), name_list))
+    array = torch.zeros((len(name_list), len(name_list)))
     for i in range(len(name_list)):
-        for j in range(i, len(name_list)):
-            print(i, j, nx.graph_edit_distance(graph_list[i].get_simple_graph(), graph_list[j].get_simple_graph(), node_subst_cost=node_subst_cost, node_del_cost=node_ins_del_cost, node_ins_cost=node_ins_del_cost, edge_subst_cost=edge_subst_cost, edge_ins_cost=edge_ins_del_cost, edge_del_cost=edge_ins_del_cost))
+        for j in range(len(name_list)):
+            array[i, j] = nx.graph_edit_distance(graph_list[i].get_simple_graph(), graph_list[j].get_simple_graph(), node_subst_cost=node_subst_cost, node_del_cost=node_ins_del_cost, node_ins_cost=node_ins_del_cost, edge_subst_cost=edge_subst_cost, edge_ins_cost=edge_ins_del_cost, edge_del_cost=edge_ins_del_cost)
+    utils.tensor_to_csv(array, "./output/geds.csv")
