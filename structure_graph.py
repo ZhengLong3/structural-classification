@@ -473,8 +473,8 @@ if __name__ == "__main__":
     def load_from_gaussian_model_example():
         # loading from gaussian model and saving to file.
         gaussian = GaussianModel(3)
-        gaussian.load_ply("./data/kite_prism.ply")
-        graph = StructureGraph.create_from_gaussians(gaussian, factor=1.3)
+        gaussian.load_ply("./data/31square.ply")
+        graph = StructureGraph.create_from_gaussians(gaussian, factor=1.1)
         graph.filter_by_size(0.3)
         graph.to_json("output/structure.json")
         graph.visualise_graph()
