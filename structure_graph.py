@@ -266,7 +266,7 @@ class StructureGraph:
         pcd = pcd.to_legacy()
         oboxes = pcd.detect_planar_patches(
             normal_variance_threshold_deg=30,
-            coplanarity_deg=75,
+            coplanarity_deg=70,
             outlier_ratio=0.4,
             min_plane_edge_length=0,
             min_num_points=0,
@@ -473,7 +473,7 @@ if __name__ == "__main__":
     def load_from_gaussian_model_example():
         # loading from gaussian model and saving to file.
         gaussian = GaussianModel(3)
-        gaussian.load_ply("./data/31square.ply")
+        gaussian.load_ply("./data/full_tetrahedron.ply")
         graph = StructureGraph.create_from_gaussians(gaussian, factor=1.1)
         graph.filter_by_size(0.3)
         graph.to_json("output/structure.json")
